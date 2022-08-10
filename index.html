@@ -27,13 +27,7 @@
               [0,4,4,4,4,0],
               [0,4,4,4,4,0]
         ]
-      };
-      const img = document.getElementById("img");
-      img.onload = function() {
-        img.width = ball.width;
-        img.height = ball.height;
-      }
-      img.src = "ball.svg";    
+      };     
       
       canvas.width = cfg.canvas.width;
       canvas.height = cfg.canvas.height;
@@ -47,6 +41,13 @@
 
       document.body.appendChild(canvas);
       
+      const img = new Image();
+      img.src = "img/ball.png";
+      img.onload = () => {
+        img.width = ball.width;
+        img.height = ball.height;
+      };
+
       const ball = {
         x: null,
         y: null,
@@ -58,8 +59,9 @@
         damage: 4,
         
         update: function() {
-          ctx.fillRect(this.x, this.y, this.width, this.height);
-          ctx.stroke();
+          //ctx.fillRect(this.x, this.y, this.width, this.height);
+          //ctx.stroke();
+          ctx.drawImage(img, this.x, this.y, this.width, this.height);
           
           if(this.x < 0 || this.x > canvas.width) this.dx *= -1;
           if(this.y < 0 || this.y > canvas.height) this.dy *= -1;
@@ -179,6 +181,5 @@
       });
       
     </script>
-    <img id="ball">
   </body>
 </html>
