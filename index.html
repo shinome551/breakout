@@ -1,9 +1,14 @@
 <!DOCTYPE html>
 <html>
   <body>
+    <div id="canvas-wrap"></div>
+
+    <script src="node_modules/howler/dist/howler.js"></script>
     <script>
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext('2d');
+      const se_hit = new Howl({
+        src: ['audio/hit01.mp3']
+      });
+
       const cfg = {
         "canvas": {
           "width": 400,
@@ -12,34 +17,59 @@
         "ball": {
           "width": 6,
           "height": 6,
-          "speed": 4
+          "speed": 4,
+          "damage": 1
         },
         "paddle": {
           "width": 100,
           "height": 15,
           "speed": 4
         },
-        "level": [
+        "grid": {
+          "width": 6,
+          "height": 6,
+          "margin_x": 10,
+          "margin_y": 10,
+          "canvas_ratio_x": 1,
+          "canvas_ratio_y": 0.4,
+          "level": [
               [0,0,0,0,0,0],
-              [0,4,4,4,4,0],
+              [2,2,2,2,2,2],
               [0,4,4,4,4,0],
               [0,4,4,4,4,0],
               [0,4,4,4,4,0],
               [0,4,4,4,4,0]
-        ]
-      };     
+          ]
+        }
+      };
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext('2d');
       
       canvas.width = cfg.canvas.width;
       canvas.height = cfg.canvas.height;
-      
-      canvas.setAttribute(
-        "style",
-        "display:block",
-        "margin:auto",
-        "background-color: #ddd"
-      );
+      canvas.setAttribute('style', 'display:inline-block;margin:auto;background-color: #ddd');
 
-      document.body.appendChild(canvas);
+      const canvas_ui = document.createElement("canvas");
+      const ctx_ui = canvas_ui.getContext('2d');
+      
+      canvas_ui.width = 200;
+      canvas_ui.height = cfg.canvas.height;
+      canvas_ui.setAttribute('style', 'display:inline-block;margin:auto;background-color: #aaa');
+
+      const canvas_wrap = document.getElementById('canvas-wrap')
+      canvas_wrap.appendChild(canvas);
+      canvas_wrap.appendChild(canvas_ui);
+
+      ctx_ui.font = '20pt sans-serif';
+      ctx_ui.textAlign = 'center'
+      ctx_ui.fillText('LEVEL', canvas_ui.width / 2, 30)
+      ctx_ui.fillText('SCORE', canvas_ui.width / 2, 120)
+      ctx_ui.fillText('LIFE', canvas_ui.width / 2, 210)
+
+      const manager = {
+        state: null
+      };
       
       const img = new Image();
       img.src = "img/ball.png";
@@ -56,18 +86,26 @@
         speed: cfg.ball.speed,
         dx: null,
         dy: null,
-        damage: 4,
-        
+        damage: cfg.ball.damage,
+        hit_x: function() {
+          this.dx > 0 ? this.x -= this.width : this.x += this.width;
+          this.dx *= -1;
+          se_hit.play();
+        },
+        hit_y: function() {
+          this.dy > 0 ? this.y -= this.height : this.y += this.height;
+          this.dy *= -1;
+          se_hit.play();
+        },
         update: function() {
-          //ctx.fillRect(this.x, this.y, this.width, this.height);
-          //ctx.stroke();
-          ctx.drawImage(img, this.x, this.y, this.width, this.height);
-          
-          if(this.x < 0 || this.x > canvas.width) this.dx *= -1;
-          if(this.y < 0 || this.y > canvas.height) this.dy *= -1;
-          
           this.x += this.dx;
           this.y += this.dy;
+        },
+        draw: function() {
+          //ctx.fillRect(this.x, this.y, this.width, this.height);
+          //ctx.stroke();
+
+          ctx.drawImage(img, this.x, this.y, this.width, this.height);
         }
           
       }
@@ -80,26 +118,29 @@
         dx: null,
         
         update: function() {
+          if(this.x + this.dx > 0 && this.x + this.width + this.dx < canvas.width) this.x += this.dx;
+        },
+        draw: function() {
           ctx.fillRect(this.x, this.y, this.width, this.height);
           ctx.fill();
-          
-          if(this.x + this.dx > 0 && this.x + this.width + this.dx < canvas.width) this.x += this.dx;
         }
       }
       const block = {
         width: null,
-        height: 20,
+        height: null,
         data: [],
-        update: function() {
+        draw: function() {
           this.data.forEach(brick => {
             ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
             ctx.stroke();
           })
         }
       }
-      const level = cfg.level
+      const grid = cfg.grid
       
       const init = () => {
+        console.log('init');
+        manager.state = 'ready'
         paddle.x = canvas.width / 2 - paddle.width / 2;
         paddle.y = canvas.height - paddle.height;
         
@@ -108,17 +149,18 @@
         ball.dx = ball.speed;
         ball.dy = ball.speed;
         
-        block.width = canvas.width / level[0].length
+        block.width = (grid.canvas_ratio_x * canvas.width - 2 * grid.margin_x) / grid.width
+        block.height = (grid.canvas_ratio_y * canvas.height - 2 * grid.margin_y) / grid.height
         
-        for(let i=0; i<level.length; i++) {
-          for(let j=0; j<level[i].length; j++) {
-            if(level[i][j]) {
+        for(let i=0; i<grid.height; i++) {
+          for(let j=0; j<grid.width; j++) {
+            if(grid.level[i][j]) {
               block.data.push({
-                x: block.width * j,
-                y: block.height * i,
+                x: grid.margin_x + block.width * j,
+                y: grid.margin_y + block.height * i,
                 width: block.width,
                 height: block.height,
-                HP: level[i][j]
+                HP: grid.level[i][j]
               })
             }
           }
@@ -139,42 +181,51 @@
         w = Math.max(x_right - x_left, 0);
         h = Math.max(y_bottom - y_top, 0);
         if(w * h > 0) {
-          return w > h ? [1, -1] : [-1, 1]
+          return w > h ? [false, true] : [true, false]
         } else {
-          return [1, 1];
+          return [false, false];
         }
       }
       
       const loop = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        paddle.update();
-        ball.update();
-        block.update();
-        
-        collision = collide(ball, paddle);
-        ball.dx *= collision[0];
-        ball.dy *= collision[1];
-        //ball.y = paddle.y - ball.height; //TODO
-        
-        block.data.forEach((brick, index) => {
-          collision = collide(ball, brick)
-          ball.dx *= collision[0];
-          ball.dy *= collision[1];
-          if ((collision[0] + collision[1]) == 0) {
-            brick.HP -= ball.damage;
-            if (brick.HP < 1) block.data.splice(index, 1);
-          }
-        })
+        paddle.draw();
+        ball.draw();
+        block.draw();
+        if (manager.state == 'play') {
+          paddle.update();
+          ball.update();
+
+          if(ball.x < 0 || ball.x > canvas.width) ball.hit_x();
+          if(ball.y < 0 || ball.y > canvas.height) ball.hit_y();
+          
+          [collision_x, collision_y] = collide(ball, paddle);
+          collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
+          
+          block.data.forEach((brick, index) => {
+            [collision_x, collision_y] = collide(ball, brick);
+            collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
+            if (collision_x || collision_y) {
+              brick.HP -= ball.damage;
+              if (brick.HP < 1) block.data.splice(index, 1);
+            }
+          })
+        }
         
         window.requestAnimationFrame(loop);
       }
       
       init();
       loop();
-      
+
       document.addEventListener('keydown', e => {
         if(e.key == 'ArrowLeft') paddle.dx = -1 * paddle.speed;
         if(e.key == 'ArrowRight') paddle.dx = paddle.speed;
+        if(e.key == 's' && manager.state == 'ready') manager.state = 'play';
+        if(e.key == 'r' && manager.state == 'play') {
+          manager.state = 'ready';
+          init();
+        }
       });
       document.addEventListener('keyup', () => {
         paddle.dx = 0;
