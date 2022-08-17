@@ -28,17 +28,15 @@
         "grid": {
           "width": 6,
           "height": 6,
-          "margin_x": 10,
-          "margin_y": 10,
           "canvas_ratio_x": 1,
           "canvas_ratio_y": 0.4,
           "level": [
               [0,0,0,0,0,0],
-              [2,2,2,2,2,2],
-              [0,4,4,4,4,0],
-              [0,4,4,4,4,0],
-              [0,4,4,4,4,0],
-              [0,4,4,4,4,0]
+              [0,1,1,1,1,0],
+              [0,1,1,1,1,0],
+              [0,1,1,1,1,0],
+              [0,1,1,1,1,0],
+              [0,1,1,1,1,0]
           ]
         }
       };
@@ -126,14 +124,16 @@
         }
       }
       const block = {
+        idx: null,
         width: null,
         height: null,
-        data: [],
+        data: {},
         draw: function() {
-          this.data.forEach(brick => {
+          for(key in this.data) {
+            brick = this.data[key]
             ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
             ctx.stroke();
-          })
+          }
         }
       }
       const grid = cfg.grid
@@ -149,20 +149,22 @@
         ball.dx = ball.speed;
         ball.dy = ball.speed;
         
-        block.width = (grid.canvas_ratio_x * canvas.width - 2 * grid.margin_x) / grid.width
-        block.height = (grid.canvas_ratio_y * canvas.height - 2 * grid.margin_y) / grid.height
+        block.width = (grid.canvas_ratio_x * canvas.width) / grid.width
+        block.height = (grid.canvas_ratio_y * canvas.height) / grid.height
         
+        let k = 0;
         for(let i=0; i<grid.height; i++) {
           for(let j=0; j<grid.width; j++) {
             if(grid.level[i][j]) {
-              block.data.push({
-                x: grid.margin_x + block.width * j,
-                y: grid.margin_y + block.height * i,
+              block.data[k] = {
+                x: block.width * j,
+                y: block.height * i,
                 width: block.width,
                 height: block.height,
                 HP: grid.level[i][j]
-              })
+              };
             }
+            k++;
           }
         }
       }
@@ -187,6 +189,10 @@
         }
       }
       
+      const clamp = (x, min, max) => {
+        return Math.min(Math.max(x, min), max);
+      }
+
       const loop = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         paddle.draw();
@@ -201,15 +207,31 @@
           
           [collision_x, collision_y] = collide(ball, paddle);
           collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
-          
-          block.data.forEach((brick, index) => {
-            [collision_x, collision_y] = collide(ball, brick);
-            collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
-            if (collision_x || collision_y) {
-              brick.HP -= ball.damage;
-              if (brick.HP < 1) block.data.splice(index, 1);
+
+          if (ball.y < canvas.height * grid.canvas_ratio_y) {
+            ball_center_x = ball.x + ball.width / 2;
+            ball_center_y = ball.y + ball.height / 2;
+            x_index = Math.floor(ball_center_x / block.width);
+            y_index = Math.floor(ball_center_y / block.height);
+            index_keys = [
+              x_index + y_index * grid.width,
+              (x_index - 1) + y_index * grid.width,
+              x_index + (y_index - 1) * grid.width,
+              (x_index + 1) + y_index * grid.width,
+              x_index + (y_index + 1) * grid.width
+            ];
+
+            for (const idx of index_keys) {
+              if (idx in block.data) {
+                [collision_x, collision_y] = collide(ball, block.data[idx]);
+                collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
+                if (collision_x || collision_y) {
+                  brick.HP -= ball.damage;
+                  if (brick.HP < 1) delete block.data[idx];
+                }
+              }
             }
-          })
+          }
         }
         
         window.requestAnimationFrame(loop);
