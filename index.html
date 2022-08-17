@@ -38,7 +38,8 @@
               [0,1,1,1,1,0],
               [0,1,1,1,1,0]
           ]
-        }
+        },
+        "life": 3
       };
 
       const canvas = document.createElement("canvas");
@@ -66,7 +67,16 @@
       ctx_ui.fillText('LIFE', canvas_ui.width / 2, 210)
 
       const manager = {
-        state: null
+        state: null,
+        score: null,
+        life:  null,
+        level: null,
+        init: function () {
+          this.state = 'ready';
+          this.score = 0;
+          this.level = 1;
+          this.life = cfg.life 
+        }
       };
       
       const img = new Image();
@@ -104,8 +114,13 @@
           //ctx.stroke();
 
           ctx.drawImage(img, this.x, this.y, this.width, this.height);
+        },
+        init: function() {
+          this.x = paddle.x + paddle.width / 2 - ball.width / 2;
+          this.y = paddle.y - ball.height;
+          this.dx = ball.speed;
+          this.dy = -1 * ball.speed;
         }
-          
       }
       const paddle = {
         x: null,
@@ -140,14 +155,10 @@
       
       const init = () => {
         console.log('init');
-        manager.state = 'ready'
         paddle.x = canvas.width / 2 - paddle.width / 2;
         paddle.y = canvas.height - paddle.height;
         
-        ball.x = canvas.width / 2;
-        ball.y = canvas.height / 2 + 50;
-        ball.dx = ball.speed;
-        ball.dy = ball.speed;
+        ball.init();
         
         block.width = (grid.canvas_ratio_x * canvas.width) / grid.width
         block.height = (grid.canvas_ratio_y * canvas.height) / grid.height
@@ -167,6 +178,7 @@
             k++;
           }
         }
+        manager.init();
       }
       
       const collide = (obj1, obj2) => {
@@ -198,19 +210,33 @@
         paddle.draw();
         ball.draw();
         block.draw();
+        ctx_ui.clearRect(0, 0, canvas_ui.width, canvas_ui.height);
+        ctx_ui.fillText('LEVEL', canvas_ui.width / 2, 30);
+        ctx_ui.fillText(String(manager.level), canvas_ui.width / 2, 60);
+        ctx_ui.fillText('SCORE', canvas_ui.width / 2, 120);
+        ctx_ui.fillText(String(manager.score), canvas_ui.width / 2, 150);
+        ctx_ui.fillText('LIFE', canvas_ui.width / 2, 210);
+        ctx_ui.fillText(String(manager.life), canvas_ui.width / 2, 240);
         if (manager.state == 'play') {
           paddle.update();
           ball.update();
 
-          if(ball.x < 0 || ball.x > canvas.width) ball.hit_x();
-          if(ball.y < 0 || ball.y > canvas.height) ball.hit_y();
+          ball_center_x = ball.x + ball.width / 2;
+          ball_center_y = ball.y + ball.height / 2;
+
+          if (ball_center_x < 0 || ball_center_x > canvas.width) ball.hit_x();
+          if (ball_center_y < 0) ball.hit_y();
+          if (ball_center_y > canvas.height) {
+            manager.life += -1;
+            manager.life == 0 ? manager.state = 'over' : manager.state = 'ready';
+            ball.init();
+          }
           
           [collision_x, collision_y] = collide(ball, paddle);
           collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
 
           if (ball.y < canvas.height * grid.canvas_ratio_y) {
-            ball_center_x = ball.x + ball.width / 2;
-            ball_center_y = ball.y + ball.height / 2;
+            
             x_index = Math.floor(ball_center_x / block.width);
             y_index = Math.floor(ball_center_y / block.height);
             index_keys = [
@@ -227,11 +253,18 @@
                 collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
                 if (collision_x || collision_y) {
                   brick.HP -= ball.damage;
-                  if (brick.HP < 1) delete block.data[idx];
+                  if (brick.HP < 1) {
+                    delete block.data[idx];
+                    manager.score += 100
+                  }
                 }
               }
             }
           }
+          
+        } else if (manager.state == 'ready') {
+          paddle.update();
+          ball.x = paddle.x + paddle.width / 2 - ball.width / 2;
         }
         
         window.requestAnimationFrame(loop);
@@ -244,7 +277,7 @@
         if(e.key == 'ArrowLeft') paddle.dx = -1 * paddle.speed;
         if(e.key == 'ArrowRight') paddle.dx = paddle.speed;
         if(e.key == 's' && manager.state == 'ready') manager.state = 'play';
-        if(e.key == 'r' && manager.state == 'play') {
+        if(e.key == 'r' && ['play', 'over'].includes(manager.state)) {
           manager.state = 'ready';
           init();
         }
