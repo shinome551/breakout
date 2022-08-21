@@ -12,31 +12,36 @@
       const cfg = {
         "canvas": {
           "width": 400,
-          "height": 400
+          "height": 600
         },
         "ball": {
           "width": 6,
           "height": 6,
           "speed": 4,
-          "damage": 1
+          "damage": 1,
+          "ricochet_ratio": 0.5,
         },
         "paddle": {
           "width": 100,
           "height": 15,
-          "speed": 4
+          "speed": 4,
+          "center_ratio": 0.2,
+          "edge_ratio": 0.2
         },
         "grid": {
-          "width": 6,
-          "height": 6,
-          "canvas_ratio_x": 1,
+          "width": 12,
+          "height": 8,
+          "canvas_ratio_x": 0.8,
           "canvas_ratio_y": 0.4,
-          "level": [
-              [0,0,0,0,0,0],
-              [0,1,1,1,1,0],
-              [0,1,1,1,1,0],
-              [0,1,1,1,1,0],
-              [0,1,1,1,1,0],
-              [0,1,1,1,1,0]
+          "alignment": [
+              [0,0,0,0,0,0,0,0,0,0,0,0],
+              [0,1,1,1,1,0,0,1,1,1,1,0],
+              [0,1,1,1,1,0,0,1,1,1,1,0],
+              [0,1,1,1,1,0,0,1,1,1,1,0],
+              [0,1,1,1,1,0,0,1,1,1,1,0],
+              [0,1,1,1,1,0,0,1,1,1,1,0],
+              [0,1,1,1,1,0,0,1,1,1,1,0],
+              [0,0,0,0,0,0,0,0,0,0,0,0]
           ]
         },
         "life": 3
@@ -95,6 +100,8 @@
         dx: null,
         dy: null,
         damage: cfg.ball.damage,
+        is_bullet: false,
+        ricochet_ratio: cfg.ball.ricochet_ratio,
         hit_x: function() {
           this.dx > 0 ? this.x -= this.width : this.x += this.width;
           this.dx *= -1;
@@ -106,8 +113,9 @@
           se_hit.play();
         },
         update: function() {
-          this.x += this.dx;
-          this.y += this.dy;
+          scale = this.is_bullet ? 1.5 : 1.0
+          this.x += scale * this.dx;
+          this.y += scale * this.dy;
         },
         draw: function() {
           //ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -129,6 +137,8 @@
         height: cfg.paddle.height,
         speed: cfg.paddle.speed,
         dx: null,
+        center_ratio: cfg.paddle.center_ratio,
+        edge_ratio: cfg.paddle.edge_ratio,
         
         update: function() {
           if(this.x + this.dx > 0 && this.x + this.width + this.dx < canvas.width) this.x += this.dx;
@@ -136,6 +146,16 @@
         draw: function() {
           ctx.fillRect(this.x, this.y, this.width, this.height);
           ctx.fill();
+        },
+        is_hit_center: function(ball_center_x) {
+          paddle_center_x = this.x + this.width / 2
+          radius = 0.5 * this.width * this.center_ratio;
+          return Math.abs(ball_center_x - paddle_center_x) < radius
+        },
+        is_hit_chip: function(ball_center_x) {
+          paddle_center_x = this.x + this.width / 2;
+          radius = 0.5 * this.width * (1 - this.edge_ratio);
+          return Math.abs(ball_center_x - paddle_center_x) > radius
         }
       }
       const block = {
@@ -162,17 +182,18 @@
         
         block.width = (grid.canvas_ratio_x * canvas.width) / grid.width
         block.height = (grid.canvas_ratio_y * canvas.height) / grid.height
+        margin_x = 0.5 * (1 - grid.canvas_ratio_x) * canvas.width;
         
         let k = 0;
         for(let i=0; i<grid.height; i++) {
           for(let j=0; j<grid.width; j++) {
-            if(grid.level[i][j]) {
+            if(grid.alignment[i][j]) {
               block.data[k] = {
-                x: block.width * j,
+                x: margin_x + block.width * j,
                 y: block.height * i,
                 width: block.width,
                 height: block.height,
-                HP: grid.level[i][j]
+                HP: grid.alignment[i][j]
               };
             }
             k++;
@@ -233,11 +254,23 @@
           }
           
           [collision_x, collision_y] = collide(ball, paddle);
-          collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
+          if (collision_y || collision_x) {
+            ball.hit_y();
+            ball.is_bullet = paddle.is_hit_center(ball_center_x);
+            if (paddle.is_hit_chip(ball_center_x)) {
+              console.log("hit chip")
+              paddle_center_x = paddle.x + 0.5 * paddle.width;
+              if (ball_center_x > paddle_center_x) {
+                ball.dx *= ball.dx > 0 ? 1 : -1;
+              } else {
+                ball.dx *= ball.dx > 0 ? -1 : 1;
+              };
+            }
+          }
 
           if (ball.y < canvas.height * grid.canvas_ratio_y) {
-            
-            x_index = Math.floor(ball_center_x / block.width);
+            margin_x = 0.5 * (1 - grid.canvas_ratio_x) * canvas.width;
+            x_index = Math.floor((ball_center_x - margin_x) / block.width);
             y_index = Math.floor(ball_center_y / block.height);
             index_keys = [
               x_index + y_index * grid.width,
@@ -250,10 +283,10 @@
             for (const idx of index_keys) {
               if (idx in block.data) {
                 [collision_x, collision_y] = collide(ball, block.data[idx]);
-                collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
+                if (!ball.is_bullet) collision_x ? ball.hit_x() : collision_y ? ball.hit_y() : ""
                 if (collision_x || collision_y) {
                   brick.HP -= ball.damage;
-                  if (brick.HP < 1) {
+                  if (brick.HP < 1 || ball.is_bullet) {
                     delete block.data[idx];
                     manager.score += 100
                   }
@@ -277,13 +310,20 @@
         if(e.key == 'ArrowLeft') paddle.dx = -1 * paddle.speed;
         if(e.key == 'ArrowRight') paddle.dx = paddle.speed;
         if(e.key == 's' && manager.state == 'ready') manager.state = 'play';
-        if(e.key == 'r' && ['play', 'over'].includes(manager.state)) {
+        if(e.key == 'r') {
           manager.state = 'ready';
           init();
         }
+        if(e.key == 'z') ball.speed = 2*cfg.ball.speed;
       });
-      document.addEventListener('keyup', () => {
+      document.addEventListener('keyup', e => {
+        if(e.key == 'z') ball.speed = cfg.ball.speed;
         paddle.dx = 0;
+      });
+      document.addEventListener('mousemove', e => {
+        //console.log([e.x, e.y]);
+        paddle.x = e.x > 0 ? e.x < canvas.width ? e.x : canvas.width : 0;
+        paddle.x -= 0.5 * paddle.width
       });
       
     </script>
