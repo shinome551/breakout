@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <script>
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext('2d');
+      const cfg = {
+        "canvas": {
+          "width": 400,
+          "height": 400
+        },
+        "ball": {
+          "width": 6,
+          "height": 6,
+          "speed": 4
+        },
+        "paddle": {
+          "width": 100,
+          "height": 15,
+          "speed": 4
+        },
+        "level": [
+              [0,0,0,0,0,0],
+              [0,4,4,4,4,0],
+              [0,4,4,4,4,0],
+              [0,4,4,4,4,0],
+              [0,4,4,4,4,0],
+              [0,4,4,4,4,0]
+        ]
+      };
+      const img = document.getElementById("img");
+      img.onload = function() {
+        img.width = ball.width;
+        img.height = ball.height;
+      }
+      img.src = "ball.svg";    
+      
+      canvas.width = cfg.canvas.width;
+      canvas.height = cfg.canvas.height;
+      
+      canvas.setAttribute(
+        "style",
+        "display:block",
+        "margin:auto",
+        "background-color: #ddd"
+      );
+
+      document.body.appendChild(canvas);
+      
+      const ball = {
+        x: null,
+        y: null,
+        width: cfg.ball.width,
+        height: cfg.ball.height,
+        speed: cfg.ball.speed,
+        dx: null,
+        dy: null,
+        damage: 4,
+        
+        update: function() {
+          ctx.fillRect(this.x, this.y, this.width, this.height);
+          ctx.stroke();
+          
+          if(this.x < 0 || this.x > canvas.width) this.dx *= -1;
+          if(this.y < 0 || this.y > canvas.height) this.dy *= -1;
+          
+          this.x += this.dx;
+          this.y += this.dy;
+        }
+          
+      }
+      const paddle = {
+        x: null,
+        y: null,
+        width: cfg.paddle.width,
+        height: cfg.paddle.height,
+        speed: cfg.paddle.speed,
+        dx: null,
+        
+        update: function() {
+          ctx.fillRect(this.x, this.y, this.width, this.height);
+          ctx.fill();
+          
+          if(this.x + this.dx > 0 && this.x + this.width + this.dx < canvas.width) this.x += this.dx;
+        }
+      }
+      const block = {
+        width: null,
+        height: 20,
+        data: [],
+        update: function() {
+          this.data.forEach(brick => {
+            ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
+            ctx.stroke();
+          })
+        }
+      }
+      const level = cfg.level
+      
+      const init = () => {
+        paddle.x = canvas.width / 2 - paddle.width / 2;
+        paddle.y = canvas.height - paddle.height;
+        
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height / 2 + 50;
+        ball.dx = ball.speed;
+        ball.dy = ball.speed;
+        
+        block.width = canvas.width / level[0].length
+        
+        for(let i=0; i<level.length; i++) {
+          for(let j=0; j<level[i].length; j++) {
+            if(level[i][j]) {
+              block.data.push({
+                x: block.width * j,
+                y: block.height * i,
+                width: block.width,
+                height: block.height,
+                HP: level[i][j]
+              })
+            }
+          }
+        }
+      }
+      
+      const collide = (obj1, obj2) => {
+        /*
+        return obj1.x < obj2.x + obj2.width && 
+          obj2.x < obj1.x + obj1.width && 
+          obj1.y < obj2.y + obj2.height && 
+          obj2.y < obj1.y + obj1.height;
+        */
+        x_left = Math.max(obj1.x, obj2.x);
+        x_right = Math.min(obj1.x + obj1.width, obj2.x + obj2.width);
+        y_top = Math.max(obj1.y, obj2.y);
+        y_bottom = Math.min(obj1.y + obj1.height, obj2.y + obj2.height);
+        w = Math.max(x_right - x_left, 0);
+        h = Math.max(y_bottom - y_top, 0);
+        if(w * h > 0) {
+          return w > h ? [1, -1] : [-1, 1]
+        } else {
+          return [1, 1];
+        }
+      }
+      
+      const loop = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        paddle.update();
+        ball.update();
+        block.update();
+        
+        collision = collide(ball, paddle);
+        ball.dx *= collision[0];
+        ball.dy *= collision[1];
+        //ball.y = paddle.y - ball.height; //TODO
+        
+        block.data.forEach((brick, index) => {
+          collision = collide(ball, brick)
+          ball.dx *= collision[0];
+          ball.dy *= collision[1];
+          if ((collision[0] + collision[1]) == 0) {
+            brick.HP -= ball.damage;
+            if (brick.HP < 1) block.data.splice(index, 1);
+          }
+        })
+        
+        window.requestAnimationFrame(loop);
+      }
+      
+      init();
+      loop();
+      
+      document.addEventListener('keydown', e => {
+        if(e.key == 'ArrowLeft') paddle.dx = -1 * paddle.speed;
+        if(e.key == 'ArrowRight') paddle.dx = paddle.speed;
+      });
+      document.addEventListener('keyup', () => {
+        paddle.dx = 0;
+      });
+      
+    </script>
+    <img id="ball">
+  </body>
+</html>
